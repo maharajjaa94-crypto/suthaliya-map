@@ -2,56 +2,239 @@
 <!DOCTYPE html>
 <html lang="hi">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Suthaliya Satellite Map</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#123b2b">
+<meta name="description" content="Suthaliya Map — interactive map for Suthaliya, Rajgarh, Madhya Pradesh.">
+<title>Suthaliya Map Pro</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-body{margin:0;font-family:Arial,sans-serif}
-h2{padding:12px;margin:0;background:#14532d;color:white;font-size:20px}
-#map{height:calc(100vh - 48px);width:100%}
+:root{color-scheme:dark;--bg:#0b1510;--panel:#12231a;--panel2:#1a3023;--line:#355844;--accent:#168451;--text:#f4fff7;--muted:#b9d0c0}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+body{display:flex;flex-direction:column;min-height:100%;overflow:hidden}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#123b2b;border-bottom:1px solid var(--line);z-index:500}
+.brand{min-width:0}.brand h1{font-size:18px;margin:0;font-weight:750}.brand p{font-size:11px;margin:3px 0 0;color:#d2e7d8}
+button,input,select{font:inherit}
+button{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 11px;border-radius:10px;cursor:pointer;touch-action:manipulation}
+button:hover{filter:brightness(1.12)}button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:#37a66f}
+button.active{outline:2px solid #8ee3b0}
+#searchbar{display:flex;gap:7px;padding:9px;background:var(--panel);border-bottom:1px solid var(--line);z-index:400}
+#searchInput{flex:1;min-width:0;width:100%;background:#08120c;border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px}
+#map{flex:1;min-height:180px;width:100%;background:#dce8df}
+#tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;padding:9px;background:var(--panel);border-top:1px solid var(--line)}
+#tools button{font-size:12px;padding:10px 3px;min-height:42px}
+#statusbar{font-size:12px;line-height:1.5;color:var(--muted);background:#08120c;padding:8px 12px;display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+#status{color:#a7efc0}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#f9fff9;color:#13251a}
+.leaflet-control-layers{color:#18251c}
+.leaflet-control-layers label{color:#18251c}
+.leaflet-control-attribution{font-size:9px!important}
+.modal-backdrop{position:fixed;inset:0;background:#0009;z-index:2000;display:none;align-items:flex-end;justify-content:center}
+.modal-backdrop.open{display:flex}
+.modal{width:min(680px,100%);max-height:82vh;overflow:auto;background:#102219;border:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px;box-shadow:0 -8px 40px #0006}
+.modal h2{font-size:18px;margin:0 0 12px}.modal p{color:var(--muted);font-size:13px;line-height:1.5}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modal label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px}
+.modal input,.modal select{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;background:#07130c;color:white}
+.row{display:flex;gap:8px;margin-top:10px}.row>*{flex:1}
+#routeInfo{font-size:12px;line-height:1.5;color:var(--muted);margin-top:8px;white-space:pre-wrap}
+@media(min-width:760px){
+ body{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto}
+ #tools{grid-template-columns:repeat(8,minmax(0,1fr))}
+ #tools button{font-size:13px}
+ header{padding:12px 20px}
+}
+@media(max-height:650px){header{padding:7px 10px}.brand h1{font-size:16px}#tools{padding:6px;gap:5px}#tools button{padding:7px 2px;min-height:36px}#statusbar{padding:5px 9px}}
 </style>
 </head>
 <body>
-<h2>🛰️ सुठालिया सैटेलाइट नक्शा</h2>
-<div id="map"></div>
+<header>
+  <div class="brand">
+    <h1>🛰️ Suthaliya Map Pro</h1>
+    <p>सुठालिया · राजगढ़ · मध्य प्रदेश</p>
+  </div>
+  <button id="homeBtn" class="primary" title="सुठालिया पर वापस जाएँ">⌂ Home</button>
+</header>
+
+<form id="searchbar">
+  <input id="searchInput" type="search" placeholder="गाँव, जगह, स्कूल या पता खोजें…" autocomplete="off" aria-label="जगह खोजें">
+  <button class="primary" type="submit">🔎 खोजें</button>
+</form>
+
+<div id="map" role="application" aria-label="Interactive map"></div>
+
+<section id="tools" aria-label="Map tools">
+  <button id="locBtn">📍 मेरी लोकेशन</button>
+  <button id="styleBtn">🗺️ मैप शैली</button>
+  <button id="markerBtn">📌 मार्कर जोड़ें</button>
+  <button id="measureBtn">📏 दूरी मापें</button>
+  <button id="areaBtn">⬠ क्षेत्रफल</button>
+  <button id="routeBtn">🧭 रास्ता</button>
+  <button id="shareBtn">🔗 शेयर</button>
+  <button id="clearBtn">🧹 साफ़ करें</button>
+</section>
+
+<footer id="statusbar">
+  <span id="status" aria-live="polite">मैप लोड हो रहा है…</span>
+  <span id="coordinateInfo">मैप पर टैप करें: निर्देशांक यहाँ आएँगे।</span>
+</footer>
+
+<div id="routeModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="routeTitle">
+  <div class="modal">
+    <h2 id="routeTitle">🧭 रास्ता खोजें</h2>
+    <p>जगहों के नाम या पूरे पते लिखें। रास्ता सार्वजनिक OSRM demo सेवा से खोजा जाएगा; उसकी उपलब्धता की गारंटी नहीं है।</p>
+    <label for="routeFrom">कहाँ से?</label>
+    <input id="routeFrom" value="Suthaliya, Rajgarh, Madhya Pradesh, India">
+    <label for="routeTo">कहाँ तक?</label>
+    <input id="routeTo" placeholder="मंज़िल का नाम या पता">
+    <div class="row">
+      <button id="routeCancel">बंद करें</button>
+      <button id="routeGo" class="primary">रास्ता खोजें</button>
+    </div>
+    <div id="routeInfo"></div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const map = L.map("map").setView([23.99552,77.13953],14);
+(() => {
+"use strict";
 
-const satellite = L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  {
-    maxZoom:19,
-    attribution:"Tiles © Esri"
+const HOME = [23.99552, 77.13953];
+const $ = (id) => document.getElementById(id);
+const statusEl = $("status");
+const coordinateInfo = $("coordinateInfo");
+const setStatus = (message) => { statusEl.textContent = message; };
+
+if (!window.L) {
+  setStatus("मैप लाइब्रेरी लोड नहीं हुई। इंटरनेट कनेक्शन जाँचें और पेज रीफ्रेश करें।");
+  return;
+}
+
+const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView(HOME, 14);
+const markerGroup = L.featureGroup().addTo(map);
+const measureGroup = L.featureGroup().addTo(map);
+const routeGroup = L.featureGroup().addTo(map);
+
+const tileOptions = { maxZoom: 19 };
+const baseLayers = {
+  "🛰️ Satellite": L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {...tileOptions, attribution: "Imagery © Esri"}
+  ),
+  "🛣️ Street (OpenStreetMap)": L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {...tileOptions, attribution: "© OpenStreetMap contributors"}
+  ),
+  "⛰️ Terrain": L.tileLayer(
+    "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    {maxZoom: 17, attribution: "Map data © OpenStreetMap contributors, SRTM | Style © OpenTopoMap"}
+  )
+};
+const overlays = {
+  "Place labels (Esri)": L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom: 19, attribution: "Labels © Esri"}
+  ),
+  "Roads (OpenStreetMap)": L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {maxZoom: 19, opacity: 0.65, attribution: "© OpenStreetMap contributors"}
+  )
+};
+baseLayers["🛰️ Satellite"].addTo(map);
+overlays["Place labels (Esri)"].addTo(map);
+L.control.layers(baseLayers, overlays, {collapsed: true, position: "topright"}).addTo(map);
+L.control.scale({imperial: false, metric: true}).addTo(map);
+
+let lastLatLng = L.latLng(HOME[0], HOME[1]);
+let markerMode = false;
+let measureMode = false;
+let areaMode = false;
+let measurePoints = [];
+let measureLine = null;
+let areaPolygon = null;
+let areaPoints = [];
+let routeLine = null;
+let currentStyleIndex = 0;
+const styleNames = Object.keys(baseLayers);
+
+const homeMarker = L.marker(HOME).addTo(markerGroup)
+  .bindPopup("<b>सुठालिया</b><br>राजगढ़, मध्य प्रदेश<br><small>यह पिन अनुमानित केंद्र पर है, आधिकारिक सीमा नहीं।</small>");
+homeMarker.openPopup();
+
+function formatLatLng(ll) {
+  return "Latitude: " + ll.lat.toFixed(6) + " · Longitude: " + ll.lng.toFixed(6);
+}
+function distanceLabel(meters) {
+  return meters >= 1000 ? (meters / 1000).toFixed(2) + " किमी" : Math.round(meters) + " मीटर";
+}
+function resetModes() {
+  markerMode = false;
+  measureMode = false;
+  areaMode = false;
+  $("markerBtn").classList.remove("active");
+  $("measureBtn").classList.remove("active");
+  $("areaBtn").classList.remove("active");
+}
+function clearMeasurements() {
+  measureGroup.clearLayers();
+  measurePoints = [];
+  areaPoints = [];
+  measureLine = null;
+  areaPolygon = null;
+}
+function addMarker(ll, title) {
+  const marker = L.marker(ll).addTo(markerGroup);
+  marker.bindPopup("<b>" + escapeHtml(title) + "</b><br>" + formatLatLng(ll)).openPopup();
+  return marker;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+}
+
+map.on("click", (event) => {
+  const ll = event.latlng;
+  lastLatLng = ll;
+  coordinateInfo.textContent = formatLatLng(ll);
+
+  if (markerMode) {
+    addMarker(ll, "आपका मार्कर");
+    resetModes();
+    setStatus("मार्कर जोड़ दिया गया।");
+    return;
   }
-).addTo(map);
-
-const labels = L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png",
-  {
-    maxZoom:19,
-    attribution:"Labels © CARTO, OpenStreetMap contributors",
-    subdomains:"abcd"
+  if (measureMode) {
+    measurePoints.push(ll);
+    L.circleMarker(ll, {radius: 5, color: "#ffe16b", fillColor: "#ffe16b", fillOpacity: 1}).addTo(measureGroup);
+    if (measurePoints.length >= 2) {
+      if (measureLine) measureGroup.removeLayer(measureLine);
+      measureLine = L.polyline(measurePoints, {color: "#ffe16b", weight: 4}).addTo(measureGroup);
+      let total = 0;
+      for (let i = 1; i < measurePoints.length; i++) total += measurePoints[i-1].distanceTo(measurePoints[i]);
+      setStatus("मापी गई रेखा की कुल दूरी: " + distanceLabel(total) + " (सीधी/खंडों वाली दूरी, सड़क की दूरी नहीं)");
+    } else {
+      setStatus("पहला बिंदु चुना गया। दूरी के लिए और बिंदु चुनें।");
+    }
+    return;
   }
-).addTo(map);
-
-L.control.layers(
-  {"Satellite":satellite},
-  {"Roads and place names":labels}
-).addTo(map);
-
-L.marker([23.99552,77.13953])
- .addTo(map)
- .bindPopup("सुठालिया, जिला राजगढ़, मध्य प्रदेश")
- .openPopup();
-
-map.on("click", function(e){
-  L.popup()
-   .setLatLng(e.latlng)
-   .setContent("Latitude: "+e.latlng.lat.toFixed(6)+
-   "<br>Longitude: "+e.latlng.lng.toFixed(6))
-   .openOn(map);
+  if (areaMode) {
+    areaPoints.push(ll);
+    L.circleMarker(ll, {radius: 5, color: "#83e7b0", fillColor: "#83e7b0", fillOpacity: 1}).addTo(measureGroup);
+    if (areaPoints.length >= 3) {
+      if (areaPolygon) measureGroup.removeLayer(areaPolygon);
+      areaPolygon = L.polygon(areaPoints, {color: "#83e7b0", fillOpacity: 0.18}).addTo(measureGroup);
+      const area = L.GeometryUtil ? L.GeometryUtil.geodesicArea(areaPoints) : null;
+      if (area !== null) {
+        setStatus("अनुमानित क्षेत्रफल: " + (area >= 1000000 ? (area/1000000).toFixed(3) + " km²" : Math.round(area) + " m²"));
+      } else {
+        setStatus("बहुभुज बन गया। क्षेत्रफल के लिए मैप पर चुने बिंदुओं की गणना उपलब्ध नहीं है; सीमा आधिकारिक नहीं है।");
+      }
+    } else {
+      setStatus("क्षेत्रफल बनाने के लिए कम-से-कम 3 बिंदु चुनें।");
+    }
+  }
 });
 </script>
 </body>
